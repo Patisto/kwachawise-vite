@@ -1,0 +1,78 @@
+@import "tailwindcss";
+
+:root {
+  --kw-bg: #eef0fb;
+  --kw-surface: #ffffff;
+  --kw-primary: #372ee0;
+  --kw-primary-dark: #241c7f;
+  --kw-primary-darker: #171253;
+  --kw-ink: #14142b;
+  --kw-muted: #8b8fa8;
+  --kw-muted-soft: #b7bad0;
+  --kw-line: #e6e8f6;
+  --kw-success: #1fae5d;
+  --kw-success-soft: #e4f8ec;
+  --kw-danger: #e0523b;
+  --kw-orange: #f5941f;
+  --kw-orange-soft: #fdecd4;
+  --kw-teal: #14b8a6;
+  --kw-teal-soft: #dcf5f2;
+  --kw-purple: #7c6ff0;
+  --kw-purple-soft: #ece9fd;
+  --kw-yellow: #ffd166;
+}
+
+@theme inline {
+  --color-bg: var(--kw-bg);
+  --color-surface: var(--kw-surface);
+  --color-primary: var(--kw-primary);
+  --color-primary-dark: var(--kw-primary-dark);
+  --color-primary-darker: var(--kw-primary-darker);
+  --color-ink: var(--kw-ink);
+  --color-muted: var(--kw-muted);
+  --color-muted-soft: var(--kw-muted-soft);
+  --color-line: var(--kw-line);
+  --color-success: var(--kw-success);
+  --color-success-soft: var(--kw-success-soft);
+  --color-danger: var(--kw-danger);
+  --color-orange: var(--kw-orange);
+  --color-orange-soft: var(--kw-orange-soft);
+  --color-teal: var(--kw-teal);
+  --color-teal-soft: var(--kw-teal-soft);
+  --color-purple: var(--kw-purple);
+  --color-purple-soft: var(--kw-purple-soft);
+  --color-yellow: var(--kw-yellow);
+  --font-display: "Avenir Next", "Segoe UI", -apple-system, BlinkMacSystemFont,
+    system-ui, sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui,
+    sans-serif;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  background: #d8dbef;
+  color: var(--kw-ink);
+  font-family: var(--font-sans);
+  overscroll-behavior: none;
+}
+
+.kw-scroll::-webkit-scrollbar {
+  display: none;
+}
+.kw-scroll {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+button {
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--kw-primary);
+  outline-offset: 2px;
+}
