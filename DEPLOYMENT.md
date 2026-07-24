@@ -7,18 +7,29 @@
 1. **Push your code to GitHub**
    - Make sure your `.server/render.yaml` is in the repository
 
-2. **Connect to Render**
+2. **Create PostgreSQL Database**
    - Go to [render.com](https://render.com)
+   - Click "New +" → "PostgreSQL"
+   - Name it `kwachawise-db`
+   - Select Free plan
+   - Click "Create Database"
+
+3. **Connect Web Service**
    - Click "New +" → "Web Service"
    - Connect your GitHub repository
    - Render will detect `render.yaml` and configure automatically
 
-3. **Set Environment Variables**
-   - `CORS_ORIGIN`: Your Vercel frontend URL (e.g., `https://your-app.vercel.app`)
-   - `GROQ_API_KEY`: Your Groq API key from [console.groq.com](https://console.groq.com/keys)
-   - `DATABASE_URL`: Auto-populated by Render from the PostgreSQL database
+4. **Set Environment Variables**
+   - Go to your web service → Environment
+   - Add these variables:
+     - `CORS_ORIGIN`: Your Vercel frontend URL (e.g., `https://your-app.vercel.app`)
+     - `GROQ_API_KEY`: Your Groq API key from [console.groq.com](https://console.groq.com/keys)
+     - `DATABASE_URL`: Get this from the database dashboard:
+       - Go to Databases → kwachawise-db → Connect
+       - Copy the "Internal Database URL"
+       - Paste it as the DATABASE_URL value
 
-4. **Deploy**
+5. **Deploy**
    - Render will automatically build and deploy your backend
    - Note the deployed URL (e.g., `https://kwachawise-server.onrender.com`)
 
