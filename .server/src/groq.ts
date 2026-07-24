@@ -1,4 +1,4 @@
-import type { AIInsightResponse } from "./types";
+import type { AIInsightResponse } from "./types.js";
 
 export async function generateInsights(params: {
   previousSummary: string | null;

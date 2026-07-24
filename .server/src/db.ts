@@ -1,5 +1,5 @@
 import pg from "pg";
-import type { Transaction, AISummary } from "./types";
+import type { Transaction, AISummary } from "./types.js";
 
 const { Pool } = pg;
 

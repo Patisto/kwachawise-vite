@@ -3,8 +3,8 @@ services:
     name: kwachawise-server
     runtime: node
     plan: free
-    buildCommand: cd .server && npm install && npm run build
-    startCommand: cd .server && npm run start
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
     envVars:
       - key: PORT
         value: 10000
@@ -16,6 +16,7 @@ services:
         fromDatabase:
           name: kwachawise-db
           property: connectionString
+    workingDir: .server
 
 databases:
   - name: kwachawise-db

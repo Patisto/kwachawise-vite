@@ -10,9 +10,9 @@ import {
   saveAISummary,
   deleteTransaction,
   initDatabase,
-} from "./db";
-import { generateInsights } from "./groq";
-import type { Transaction, AISummary } from "./types";
+} from "./db.js";
+import { generateInsights } from "./groq.js";
+import type { Transaction, AISummary } from "./types.js";
 
 dotenv.config();
 
