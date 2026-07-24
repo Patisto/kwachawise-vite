@@ -1,28 +1,14 @@
-import initSqlJs, { Database, SqlJsStatic } from "sql.js";
+import pg from "pg";
 import type { Transaction, AISummary } from "./types";
 
-declare const require: any;
+const { Pool } = pg;
 
-let SQL: SqlJsStatic | null = null;
-let db: Database | null = null;
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
 
-const DB_PATH = process.env.DB_PATH || "./kwachawise.db";
-
-async function getDb(): Promise<Database> {
-  if (db) return db;
-
-  if (!SQL) {
-    SQL = await initSqlJs({ locateFile: (file) => `./node_modules/sql.js/dist/${file}` });
-  }
-
-  db = new SQL.Database();
-  initDb(db);
-  await loadFromDisk();
-  return db;
-}
-
-function initDb(database: Database) {
-  database.run(`
+async function initDb() {
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS transactions (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -43,99 +29,54 @@ function initDb(database: Database) {
     )
   `);
 
-  database.run(`
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS ai_summaries (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       narrative TEXT NOT NULL,
       insights TEXT NOT NULL,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )
   `);
 
-  database.run(`CREATE INDEX IF NOT EXISTS idx_txn_status ON transactions(status)`);
-  database.run(`CREATE INDEX IF NOT EXISTS idx_txn_tag ON transactions(tag)`);
-  database.run(`CREATE INDEX IF NOT EXISTS idx_txn_date ON transactions(date)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_txn_status ON transactions(status)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_txn_tag ON transactions(tag)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_txn_date ON transactions(date)`);
 }
 
-async function loadFromDisk() {
-  try {
-    const fs = await import("fs");
-    if (fs.existsSync(DB_PATH)) {
-      const buffer = fs.readFileSync(DB_PATH);
-      if (db && buffer.length > 0) {
-        db.close();
-      }
-      if (buffer.length > 0 && SQL) {
-        db = new SQL.Database(new Uint8Array(buffer));
-      }
-    }
-  } catch {
-    // ignore
-  }
-}
-
-async function saveToDisk() {
-  try {
-    const fs = await import("fs");
-    if (db) {
-      const data = db.export();
-      fs.writeFileSync(DB_PATH, Buffer.from(data));
-    }
-  } catch {
-    // ignore
-  }
-}
-
-export function getTransactions(filters?: { status?: string; tag?: string; limit?: number }): Transaction[] {
-  if (!db) throw new Error("Database not initialized");
+export async function getTransactions(filters?: { status?: string; tag?: string; limit?: number }): Promise<Transaction[]> {
   let sql = "SELECT * FROM transactions WHERE 1=1";
   const params: any[] = [];
 
   if (filters?.status) {
-    sql += " AND status = ?";
+    sql += " AND status = $1";
     params.push(filters.status);
   }
   if (filters?.tag) {
-    sql += " AND tag = ?";
+    sql += " AND tag = $" + (params.length + 1);
     params.push(filters.tag);
   }
-  sql += " ORDER BY datetime(date) DESC";
+  sql += " ORDER BY date DESC";
   if (filters?.limit) {
-    sql += " LIMIT ?";
+    sql += " LIMIT $" + (params.length + 1);
     params.push(filters.limit);
   }
 
-  const stmt = db.prepare(sql);
-  stmt.bind(params);
-  const results: Transaction[] = [];
-  while (stmt.step()) {
-    const row = stmt.getAsObject() as any;
-    results.push(rowToTransaction(row));
-  }
-  stmt.free();
-  return results;
+  const result = await pool.query(sql, params);
+  return result.rows.map(rowToTransaction);
 }
 
-export function getTransactionById(id: string): Transaction | undefined {
-  if (!db) throw new Error("Database not initialized");
-  const stmt = db.prepare("SELECT * FROM transactions WHERE id = ?");
-  stmt.bind([id]);
-  if (stmt.step()) {
-    const row = stmt.getAsObject() as any;
-    stmt.free();
-    return rowToTransaction(row);
-  }
-  stmt.free();
-  return undefined;
+export async function getTransactionById(id: string): Promise<Transaction | undefined> {
+  const result = await pool.query("SELECT * FROM transactions WHERE id = $1", [id]);
+  if (result.rows.length === 0) return undefined;
+  return rowToTransaction(result.rows[0]);
 }
 
-export function createTransaction(txn: Transaction): void {
-  if (!db) throw new Error("Database not initialized");
-  db.run(`
+export async function createTransaction(txn: Transaction): Promise<void> {
+  await pool.query(`
     INSERT INTO transactions (
       id, name, initial, avatar_bg, avatar_fg,
       amount, direction, date, category, description, remark, tag, raw_sms, status, processed_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
   `, [
     txn.id,
     txn.name,
@@ -153,63 +94,52 @@ export function createTransaction(txn: Transaction): void {
     txn.status,
     txn.processedAt || null,
   ]);
-  saveToDisk();
 }
 
-export function updateTransaction(id: string, updates: Partial<Transaction>): void {
-  if (!db) throw new Error("Database not initialized");
+export async function updateTransaction(id: string, updates: Partial<Transaction>): Promise<void> {
   const fields: string[] = [];
   const params: any[] = [];
+  let paramIndex = 1;
 
-  if (updates.status !== undefined) { fields.push("status = ?"); params.push(updates.status); }
-  if (updates.processedAt !== undefined) { fields.push("processed_at = ?"); params.push(updates.processedAt); }
-  if (updates.tag !== undefined) { fields.push("tag = ?"); params.push(updates.tag); }
-  if (updates.category !== undefined) { fields.push("category = ?"); params.push(updates.category); }
-  if (updates.description !== undefined) { fields.push("description = ?"); params.push(updates.description); }
-  if (updates.direction !== undefined) { fields.push("direction = ?"); params.push(updates.direction); }
+  if (updates.status !== undefined) { fields.push(`status = $${paramIndex++}`); params.push(updates.status); }
+  if (updates.processedAt !== undefined) { fields.push(`processed_at = $${paramIndex++}`); params.push(updates.processedAt); }
+  if (updates.tag !== undefined) { fields.push(`tag = $${paramIndex++}`); params.push(updates.tag); }
+  if (updates.category !== undefined) { fields.push(`category = $${paramIndex++}`); params.push(updates.category); }
+  if (updates.description !== undefined) { fields.push(`description = $${paramIndex++}`); params.push(updates.description); }
+  if (updates.direction !== undefined) { fields.push(`direction = $${paramIndex++}`); params.push(updates.direction); }
 
   if (fields.length > 0) {
     params.push(id);
-    db.run(`UPDATE transactions SET ${fields.join(", ")} WHERE id = ?`, params);
-    saveToDisk();
+    await pool.query(`UPDATE transactions SET ${fields.join(", ")} WHERE id = $${paramIndex}`, params);
   }
 }
 
-export function deleteTransaction(id: string): void {
-  if (!db) throw new Error("Database not initialized");
-  db.run("DELETE FROM transactions WHERE id = ?", [id]);
-  saveToDisk();
+export async function deleteTransaction(id: string): Promise<void> {
+  await pool.query("DELETE FROM transactions WHERE id = $1", [id]);
 }
 
-export function getLatestAISummary(): AISummary | undefined {
-  if (!db) throw new Error("Database not initialized");
-  const stmt = db.prepare("SELECT * FROM ai_summaries ORDER BY created_at DESC LIMIT 1");
-  if (stmt.step()) {
-    const row = stmt.getAsObject() as any;
-    stmt.free();
-    return {
-      id: row.id,
-      narrative: row.narrative,
-      insights: JSON.parse(row.insights),
-      createdAt: row.created_at,
-    };
-  }
-  stmt.free();
-  return undefined;
+export async function getLatestAISummary(): Promise<AISummary | undefined> {
+  const result = await pool.query("SELECT * FROM ai_summaries ORDER BY created_at DESC LIMIT 1");
+  if (result.rows.length === 0) return undefined;
+  const row = result.rows[0];
+  return {
+    id: row.id,
+    narrative: row.narrative,
+    insights: JSON.parse(row.insights),
+    createdAt: row.created_at,
+  };
 }
 
-export function saveAISummary(summary: { narrative: string; insights: string[] }): number {
-  if (!db) throw new Error("Database not initialized");
-  const result = db.run(
-    "INSERT INTO ai_summaries (narrative, insights) VALUES (?, ?)",
+export async function saveAISummary(summary: { narrative: string; insights: string[] }): Promise<number> {
+  const result = await pool.query(
+    "INSERT INTO ai_summaries (narrative, insights) VALUES ($1, $2) RETURNING id",
     [summary.narrative, JSON.stringify(summary.insights)]
   );
-  saveToDisk();
-  return result.lastInsertRowid as number;
+  return result.rows[0].id;
 }
 
-export async function initDatabase(): Promise<Database> {
-  return getDb();
+export async function initDatabase(): Promise<void> {
+  await initDb();
 }
 
 function rowToTransaction(row: any): Transaction {
@@ -219,7 +149,7 @@ function rowToTransaction(row: any): Transaction {
     initial: row.initial || "",
     avatarBg: row.avatar_bg || "#eef0fb",
     avatarFg: row.avatar_fg || "#372ee0",
-    amount: row.amount,
+    amount: parseFloat(row.amount),
     direction: row.direction,
     date: row.date,
     category: row.category,

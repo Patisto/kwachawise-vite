@@ -31,24 +31,24 @@ app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-app.get("/api/transactions", (req, res) => {
+app.get("/api/transactions", async (req, res) => {
   const status = req.query.status as string | undefined;
   const tag = req.query.tag as string | undefined;
   const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
 
-  const transactions = getTransactions({ status, tag, limit });
+  const transactions = await getTransactions({ status, tag, limit });
   res.json(transactions);
 });
 
-app.get("/api/transactions/:id", (req, res) => {
-  const txn = getTransactionById(req.params.id);
+app.get("/api/transactions/:id", async (req, res) => {
+  const txn = await getTransactionById(req.params.id);
   if (!txn) {
     return res.status(404).json({ error: "Transaction not found" });
   }
   res.json(txn);
 });
 
-app.post("/api/transactions", (req, res) => {
+app.post("/api/transactions", async (req, res) => {
   const body = req.body as Partial<Transaction>;
 
   if (!body.id || !body.name || body.amount === undefined || !body.direction || !body.date || !body.tag) {
@@ -74,47 +74,47 @@ app.post("/api/transactions", (req, res) => {
   };
 
   try {
-    createTransaction(txn);
+    await createTransaction(txn);
     res.status(201).json(txn);
   } catch (error: any) {
     res.status(500).json({ error: "Failed to create transaction", message: error.message });
   }
 });
 
-app.post("/api/transactions/:id/process", (req, res) => {
+app.post("/api/transactions/:id/process", async (req, res) => {
   const { tag, description } = req.body as { tag: "business" | "personal"; description?: string };
 
   if (!tag || (tag !== "business" && tag !== "personal")) {
     return res.status(400).json({ error: "Invalid tag. Must be 'business' or 'personal'" });
   }
 
-  const existing = getTransactionById(req.params.id);
+  const existing = await getTransactionById(req.params.id);
   if (!existing) {
     return res.status(404).json({ error: "Transaction not found" });
   }
 
-  updateTransaction(req.params.id, {
+  await updateTransaction(req.params.id, {
     status: "processed",
     tag,
     description: description || existing.description,
     processedAt: new Date().toISOString(),
   });
 
-  const updated = getTransactionById(req.params.id);
+  const updated = await getTransactionById(req.params.id);
   res.json(updated);
 });
 
-app.delete("/api/transactions/:id", (req, res) => {
-  const existing = getTransactionById(req.params.id);
+app.delete("/api/transactions/:id", async (req, res) => {
+  const existing = await getTransactionById(req.params.id);
   if (!existing) {
     return res.status(404).json({ error: "Transaction not found" });
   }
-  deleteTransaction(req.params.id);
+  await deleteTransaction(req.params.id);
   res.status(204).send();
 });
 
-app.get("/api/ai/summary/latest", (_req, res) => {
-  const summary = getLatestAISummary();
+app.get("/api/ai/summary/latest", async (_req, res) => {
+  const summary = await getLatestAISummary();
   if (!summary) {
     return res.status(404).json({ error: "No AI summary available yet" });
   }
@@ -123,10 +123,10 @@ app.get("/api/ai/summary/latest", (_req, res) => {
 
 app.post("/api/ai/insights", async (req, res) => {
   try {
-    const previousSummary = getLatestAISummary();
+    const previousSummary = await getLatestAISummary();
 
-    const processedTxns = getTransactions({ status: "processed" });
-    const businessTxns = processedTxns.filter((t) => t.tag === "business");
+    const processedTxns = await getTransactions({ status: "processed" });
+    const businessTxns = processedTxns.filter((t: Transaction) => t.tag === "business");
 
     const newTxns = req.body.newTransactions as {
       name: string;
@@ -142,7 +142,7 @@ app.post("/api/ai/insights", async (req, res) => {
 
     const result = await generateInsights({
       previousSummary: previousSummary?.narrative || null,
-      newTransactions: newTxns.length > 0 ? newTxns : businessTxns.map((t) => ({
+      newTransactions: newTxns.length > 0 ? newTxns : businessTxns.map((t: Transaction) => ({
         name: t.name,
         amount: t.amount,
         direction: t.direction,
@@ -153,7 +153,7 @@ app.post("/api/ai/insights", async (req, res) => {
       })),
     });
 
-    const summaryId = saveAISummary({
+    const summaryId = await saveAISummary({
       narrative: result.narrative,
       insights: result.insights,
     });
